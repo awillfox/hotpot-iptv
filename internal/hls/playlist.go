@@ -46,7 +46,11 @@ func NewManager(rends []Rendition, targetDurSec, window int, video VideoParams) 
 }
 
 func (m *Manager) Renditions() []Rendition {
-	return m.rends
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]Rendition, len(m.rends))
+	copy(out, m.rends)
+	return out
 }
 
 func (m *Manager) MarkDiscontinuity() {
