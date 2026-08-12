@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"hotpot-iptv/api/channels"
+	"hotpot-iptv/api/library"
 	"hotpot-iptv/internal/config"
 	"hotpot-iptv/internal/ffmpeg"
 )
@@ -33,6 +34,7 @@ func main() {
 		prober := ffmpeg.CLI{FFprobePath: cfg.FFprobePath}
 		r.Mount("/api/v1", channels.GetHTTPHandler(pool, prober, cfg.MediaPath))
 	}
+	r.Mount("/api/v1/library", library.GetHTTPHandler(cfg.MediaPath))
 
 	log.Printf("hotpot-iptv listening on :%d", cfg.Port)
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", cfg.Port), r); err != nil {
