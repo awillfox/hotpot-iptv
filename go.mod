@@ -4,12 +4,14 @@ go 1.26.3
 
 require (
 	github.com/go-chi/chi/v5 v5.3.1
+	github.com/go-chi/render v1.0.3
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 )
 
 require (
+	github.com/ajg/form v1.5.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
