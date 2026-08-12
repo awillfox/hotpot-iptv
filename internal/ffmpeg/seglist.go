@@ -49,7 +49,13 @@ func readEntries(path string) []SegmentEntry {
 		return nil
 	}
 	var out []SegmentEntry
-	for _, line := range strings.Split(string(data), "\n") {
+	lines := strings.Split(string(data), "\n")
+	// Drop the last element: it's either "" for a newline-terminated file
+	// or an incomplete partial row. Only process complete newline-terminated rows.
+	if len(lines) > 0 {
+		lines = lines[:len(lines)-1]
+	}
+	for _, line := range lines {
 		parts := strings.Split(strings.TrimSpace(line), ",")
 		if len(parts) != 3 {
 			continue
