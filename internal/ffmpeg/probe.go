@@ -9,31 +9,17 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"hotpot-iptv/internal/probe"
 )
 
-type AudioTrack struct {
-	Index    int    `json:"index"`
-	Lang     string `json:"lang"`
-	Codec    string `json:"codec"`
-	Channels int    `json:"channels"`
-}
-
-type SubtitleTrack struct {
-	Index    int    `json:"index"`
-	Lang     string `json:"lang"`
-	Codec    string `json:"codec"`
-	External bool   `json:"external"`
-	Path     string `json:"path,omitempty"`
-}
-
-type ProbeResult struct {
-	DurationMs int64           `json:"duration_ms"`
-	VideoCodec string          `json:"video_codec"`
-	Width      int             `json:"width"`
-	Height     int             `json:"height"`
-	Audio      []AudioTrack    `json:"audio"`
-	Subs       []SubtitleTrack `json:"subs"`
-}
+// AudioTrack, SubtitleTrack, and ProbeResult are aliases onto internal/probe so
+// this package's existing public API is unchanged while the data types live in
+// a package that both ffmpeg and hls can depend on without a cycle (ffmpeg's
+// command builder needs hls.Rendition; hls's rendition mapper needs these).
+type AudioTrack = probe.AudioTrack
+type SubtitleTrack = probe.SubtitleTrack
+type ProbeResult = probe.Result
 
 type CLI struct {
 	FFprobePath string

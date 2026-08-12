@@ -3,7 +3,7 @@ package hls
 import (
 	"fmt"
 
-	"hotpot-iptv/internal/ffmpeg"
+	"hotpot-iptv/internal/probe"
 )
 
 type RenditionKind string
@@ -53,7 +53,7 @@ func displayName(lang string, occ int) string {
 
 // ComputeRenditions unions tracks across all playlist items so the channel's
 // rendition set stays fixed for the whole session.
-func ComputeRenditions(probes []ffmpeg.ProbeResult) []Rendition {
+func ComputeRenditions(probes []probe.Result) []Rendition {
 	rends := []Rendition{{Kind: KindVideo, Key: "v", Name: "Video"}}
 	seen := map[string]bool{}
 	// audio first (order of first appearance), then subs
@@ -100,7 +100,7 @@ func countLang(rends []Rendition, kind RenditionKind, lang string) int {
 
 // MapTracks maps each rendition key to the matching track index in this file's
 // probe (nth track of that language), or -1 when the file lacks it.
-func MapTracks(rends []Rendition, p ffmpeg.ProbeResult) map[string]int {
+func MapTracks(rends []Rendition, p probe.Result) map[string]int {
 	m := make(map[string]int, len(rends))
 	for _, r := range rends {
 		switch r.Kind {

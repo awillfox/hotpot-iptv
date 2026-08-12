@@ -6,18 +6,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"hotpot-iptv/internal/ffmpeg"
+	"hotpot-iptv/internal/probe"
 )
 
-func probes() []ffmpeg.ProbeResult {
-	return []ffmpeg.ProbeResult{
+func probes() []probe.Result {
+	return []probe.Result{
 		{ // file A: tha+eng audio, tha sub
-			Audio: []ffmpeg.AudioTrack{{Index: 0, Lang: "tha"}, {Index: 1, Lang: "eng"}},
-			Subs:  []ffmpeg.SubtitleTrack{{Index: 0, Lang: "tha"}},
+			Audio: []probe.AudioTrack{{Index: 0, Lang: "tha"}, {Index: 1, Lang: "eng"}},
+			Subs:  []probe.SubtitleTrack{{Index: 0, Lang: "tha"}},
 		},
 		{ // file B: eng only, two eng subs
-			Audio: []ffmpeg.AudioTrack{{Index: 0, Lang: "eng"}},
-			Subs:  []ffmpeg.SubtitleTrack{{Index: 0, Lang: "eng"}, {Index: 1, Lang: "eng"}},
+			Audio: []probe.AudioTrack{{Index: 0, Lang: "eng"}},
+			Subs:  []probe.SubtitleTrack{{Index: 0, Lang: "eng"}, {Index: 1, Lang: "eng"}},
 		},
 	}
 }
