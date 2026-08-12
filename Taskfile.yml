@@ -1,0 +1,9 @@
+version: "3"
+
+tasks:
+  run:
+    cmds: [go run .]
+  test:
+    cmds: [go test -p 1 ./...]
+  fmt:
+    cmds: [go fmt ./...]
