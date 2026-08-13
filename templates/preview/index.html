@@ -1,1 +1,67 @@
-{{define "content"}}<h1 class="text-2xl font-bold">Coming in Task 19</h1>{{end}}
+{{define "content"}}
+<h1 class="text-2xl font-bold mb-4">Preview</h1>
+<div class="flex gap-3 mb-4 items-center flex-wrap">
+  <select id="channel" class="bg-slate-800 rounded px-3 py-2"></select>
+  <select id="audio" class="bg-slate-800 rounded px-3 py-2"></select>
+  <select id="subs" class="bg-slate-800 rounded px-3 py-2"></select>
+</div>
+<video id="video" controls autoplay playsinline class="w-full max-h-[70vh] bg-black rounded"></video>
+<p id="err" class="text-red-400 mt-2"></p>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js" integrity="sha384-V5ruNBgmYcC3SJRUQeNykAAAgde5gOFq/Hu0CZj7bygDP0yRIhkvX8+w0u/7mRvr" crossorigin="anonymous"></script>
+<script>
+// $, esc and api come from the base layout.
+let hls = null;
+
+function fillTracks() {
+  $('audio').innerHTML = hls.audioTracks.map((t, i) => `<option value="${i}">🔊 ${esc(t.name)}</option>`).join('')
+    || '<option value="-1">no audio tracks</option>';
+  $('subs').innerHTML = '<option value="-1">💬 off</option>' +
+    hls.subtitleTracks.map((t, i) => `<option value="${i}">💬 ${esc(t.name)}</option>`).join('');
+}
+
+function tune() {
+  const slug = $('channel').value;
+  if (!slug) return;
+  history.replaceState(null, '', '/preview?slug=' + encodeURIComponent(slug));
+  $('err').textContent = '';
+  if (hls) { hls.destroy(); hls = null; }
+  const video = $('video');
+  const src = `/streams/${encodeURIComponent(slug)}/master.m3u8`;
+  if (window.Hls && Hls.isSupported()) {
+    hls = new Hls();
+    hls.loadSource(src);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, fillTracks);
+    hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, fillTracks);
+    hls.on(Hls.Events.ERROR, (_, data) => {
+      if (data.fatal) $('err').textContent = 'Stream error: ' + data.details;
+    });
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = src; // Safari plays HLS natively
+  } else {
+    $('err').textContent = 'HLS is not supported in this browser';
+  }
+}
+
+$('channel').addEventListener('change', tune);
+$('audio').addEventListener('change', e => { if (hls) hls.audioTrack = +e.target.value; });
+$('subs').addEventListener('change', e => { if (hls) hls.subtitleTrack = +e.target.value; });
+
+async function init() {
+  try {
+    const chs = await api('/channels') || [];
+    const running = chs.filter(c => c.status);
+    $('channel').innerHTML = '<option value="">— pick a running channel —</option>' +
+      running.map(c => `<option value="${esc(c.slug)}">${esc(c.number)} · ${esc(c.name)}</option>`).join('');
+    if (!running.length) $('err').textContent = 'No channel is broadcasting. Start one from the dashboard.';
+    const want = new URLSearchParams(location.search).get('slug');
+    if (want && running.some(c => c.slug === want)) {
+      $('channel').value = want;
+      tune();
+    }
+  } catch (e) { $('err').textContent = e.message; }
+}
+
+init();
+</script>
+{{end}}

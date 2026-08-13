@@ -1,1 +1,68 @@
-{{define "content"}}<h1 class="text-2xl font-bold">Coming in Task 19</h1>{{end}}
+{{define "content"}}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-2xl font-bold">Dashboard</h1>
+  <span id="tick" class="text-xs text-slate-500"></span>
+</div>
+<p id="err" class="text-red-400 mb-3"></p>
+<div id="cards" class="grid md:grid-cols-2 gap-4"></div>
+<script>
+// $, esc and api come from the base layout.
+function card(c) {
+  const st = c.status;
+  const badge = st
+    ? '<span class="text-green-400">● running</span>'
+    : '<span class="text-slate-500">● stopped</span>';
+  const detail = st
+    ? `Now playing: <span class="font-mono">${esc(st.now_playing || '—')}</span><br>
+       offset ${esc(st.offset_sec)}s · item #${esc(st.item_position)}`
+    : 'Not broadcasting';
+  const actions = st
+    ? `<button data-act="stop" data-id="${esc(c.id)}" class="bg-red-900 hover:bg-red-800 px-3 py-1 rounded text-sm">Stop</button>
+       <a href="/preview?slug=${encodeURIComponent(c.slug)}" class="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-sm">Preview</a>`
+    : `<button data-act="start" data-id="${esc(c.id)}" class="bg-green-800 hover:bg-green-700 px-3 py-1 rounded text-sm">Start</button>`;
+  return `
+    <div class="bg-slate-900 rounded-lg p-4">
+      <div class="flex items-center justify-between gap-2">
+        <span class="font-bold truncate">${esc(c.number)} · ${esc(c.name)}</span>${badge}
+      </div>
+      <div class="text-sm text-slate-400 mt-2 min-h-10 break-all">${detail}</div>
+      <div class="mt-3 flex gap-2">${actions}</div>
+    </div>`;
+}
+
+let inFlight = false;
+async function refresh() {
+  if (inFlight) return; // a slow poll must not stack up behind itself
+  inFlight = true;
+  try {
+    const chs = await api('/channels') || [];
+    $('cards').innerHTML = chs.map(card).join('') || '<p class="text-slate-500">No channels.</p>';
+    $('err').textContent = '';
+    $('tick').textContent = 'updated ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    $('err').textContent = e.message;
+  } finally {
+    inFlight = false;
+  }
+}
+
+$('cards').addEventListener('click', async e => {
+  const b = e.target.closest('button[data-act]');
+  if (!b) return;
+  b.disabled = true;
+  try {
+    await api(`/channels/${b.dataset.id}/${b.dataset.act}`, { method: 'POST' });
+  } catch (err) {
+    $('err').textContent = err.message;
+  }
+  refresh();
+});
+
+refresh();
+const poll = setInterval(refresh, 5000);
+// Stop polling while the tab is hidden; a background tab does not need it.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) refresh();
+});
+</script>
+{{end}}
