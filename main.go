@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"hotpot-iptv/api/channels"
+	exporthttp "hotpot-iptv/api/export/http"
 	"hotpot-iptv/api/library"
 	streamshttp "hotpot-iptv/api/streams/http"
 	"hotpot-iptv/internal/config"
@@ -62,6 +63,12 @@ func main() {
 			log.Printf("restore running channels: %v", err)
 		}
 		r.Mount("/streams", streamshttp.NewServer(sup, cfg.StreamsPath).NewRouter())
+
+		// Attached directly rather than Mount("/"), which would collide with
+		// the root-level routes already registered above.
+		exp := exporthttp.NewServer(pool, sup)
+		r.Get("/playlist.m3u", exp.M3U)
+		r.Get("/epg.xml", exp.XMLTV)
 	} else {
 		log.Print("PSQL_URL is empty: channels API and engine are disabled")
 	}
