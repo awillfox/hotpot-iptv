@@ -11,7 +11,9 @@ services:
     restart: unless-stopped
     runtime: nvidia
     ports:
-      - "8080:8080"
+      # Host port is configurable: 8080 is often already taken on a shared box.
+      # The container always listens on 8080 regardless.
+      - "${HTTP_PORT:-8080}:8080"
     environment:
       # Passed through from .env as-is. The container reaches the existing
       # postgres over the host's LAN address, so no rewrite is needed.
