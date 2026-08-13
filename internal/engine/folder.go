@@ -46,7 +46,11 @@ func NewFolderSource(q *sqlc.Queries, setter PlaylistSetter, cfg LoaderConfig, c
 	}
 }
 
-func (s *FolderSource) Items(ctx context.Context) ([]Item, error) {
+// seedLimit caps the first scan of a folder-backed channel. Ten films is over
+// a day of programming, which the background refresh has ample time to extend.
+const seedLimit = 10
+
+func (s *FolderSource) Items(ctx context.Context, limit int) ([]Item, error) {
 	onDisk, err := library.WalkVideos(s.cfg.MediaPath, s.folder)
 	if err != nil {
 		return nil, fmt.Errorf("scan %q: %w", s.folder, err)
@@ -76,6 +80,9 @@ func (s *FolderSource) Items(ctx context.Context) ([]Item, error) {
 	}
 	s.rnd.Shuffle(len(fresh), func(i, j int) { fresh[i], fresh[j] = fresh[j], fresh[i] })
 	ordered = append(ordered, fresh...)
+	if limit > 0 && len(ordered) > limit {
+		ordered = ordered[:limit] // probe only this many; the rest arrive later
+	}
 
 	// Persist through the normal write path so probes are cached and the EPG
 	// and channels API see the same playlist the runner is playing.

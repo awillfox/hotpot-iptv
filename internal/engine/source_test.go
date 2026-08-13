@@ -45,14 +45,18 @@ type fakeSource struct {
 	calls int
 }
 
-func (s *fakeSource) Items(context.Context) ([]Item, error) {
+func (s *fakeSource) Items(_ context.Context, limit int) ([]Item, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.calls++
 	if s.err != nil {
 		return nil, s.err
 	}
-	return append([]Item(nil), s.items...), nil
+	out := append([]Item(nil), s.items...)
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
 }
 
 func (s *fakeSource) set(items []Item, err error) {

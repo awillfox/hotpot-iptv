@@ -65,7 +65,7 @@ func (l *SQLLoader) Load(ctx context.Context, channelID int32) (ChannelSpec, int
 		// start works. This blocks on probing the folder, which is why the
 		// periodic refresh afterwards runs in the background instead.
 		if src, _, ok := l.SourceFor(ctx, channelID); ok {
-			if _, err := src.Items(ctx); err != nil {
+			if _, err := src.Items(ctx, seedLimit); err != nil {
 				return ChannelSpec{}, 0, fmt.Errorf("scan source folder: %w", err)
 			}
 			if rows, err = l.q.ListPlaylistItems(ctx, channelID); err != nil {

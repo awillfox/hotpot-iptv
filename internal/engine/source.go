@@ -9,8 +9,10 @@ import (
 
 // ItemSource yields the current playlist for a folder-backed channel. It is
 // consulted on a ticker, never on the playback path.
+// A limit of 0 means "everything"; a positive limit caps how many files the
+// scan probes, which is what keeps a cold first start from taking minutes.
 type ItemSource interface {
-	Items(ctx context.Context) ([]Item, error)
+	Items(ctx context.Context, limit int) ([]Item, error)
 }
 
 // RunnerOption configures optional Runner behaviour. Variadic so channels with
@@ -70,7 +72,7 @@ func (r *Runner) refreshLoop(ctx context.Context) {
 			return
 		case <-tick.C:
 		}
-		items, err := r.source.Items(ctx)
+		items, err := r.source.Items(ctx, 0) // background: scan everything
 		if err != nil {
 			r.store.LogEvent(ctx, r.spec.ID, "warn", "playlist refresh failed: "+err.Error())
 			continue
