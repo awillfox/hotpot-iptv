@@ -84,6 +84,20 @@ func (m *Manager) Append(key, uri string, dur float64) (evicted []string) {
 	return evicted
 }
 
+// LiveURIs returns every segment URI still inside the live window, across all
+// renditions. Callers use it to decide which on-disk files are still reachable.
+func (m *Manager) LiveURIs() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []string
+	for _, pl := range m.media {
+		for _, s := range pl.segs {
+			out = append(out, s.uri)
+		}
+	}
+	return out
+}
+
 func (m *Manager) RenderMedia(key string) (string, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -17,6 +17,20 @@ func newTestManager(window int) *Manager {
 	return NewManager(rends, 4, window, VideoParams{Width: 1920, Height: 1080, BitrateK: 5000})
 }
 
+func TestLiveURIsReportsOnlyUnevictedSegments(t *testing.T) {
+	m := newTestManager(2)
+	m.Append("v", "000001/v_0.ts", 4.0)
+	m.Append("v", "000001/v_1.ts", 4.0)
+	m.Append("a_tha_0", "000001/a_tha_0_0.ts", 4.0)
+	// Pushes both video segments of item 000001 out of the 2-segment window.
+	m.Append("v", "000002/v_0.ts", 4.0)
+	m.Append("v", "000002/v_1.ts", 4.0)
+
+	assert.ElementsMatch(t,
+		[]string{"000001/a_tha_0_0.ts", "000002/v_0.ts", "000002/v_1.ts"},
+		m.LiveURIs())
+}
+
 func TestRenderMediaWithDiscontinuity(t *testing.T) {
 	m := newTestManager(10)
 	m.Append("v", "000001/v_0.ts", 4.0)
