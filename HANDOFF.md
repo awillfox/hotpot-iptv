@@ -1,8 +1,8 @@
 # hotpot-iptv — Handoff
 
 **Last updated:** 2026-08-13
-**Branch:** `worktree-hotpot-impl`
-**State:** Tasks 1–12 of 20 complete and committed. Task 13 partially done and **currently failing**.
+**Branch:** `main`
+**State:** Tasks 1–13 of 20 complete and committed. **Task 14 is next.**
 
 ---
 
@@ -81,24 +81,34 @@ Env (viper `AutomaticEnv`): `PORT=8080`, `PSQL_URL`, `MEDIA_PATH=/media`,
 | 10 | FFmpeg command builder | `4361925` |
 | 11 | FFmpeg process runner (progress, stall watchdog) | `de99872` |
 | 12 | Segment-list CSV tailer | `6de4a46`, fix `c687e28` |
+| 13 | Channel runner (engine core) | `6a3f7c8` |
 
-## In progress — Task 13: channel runner (engine core)
+## Careful: the plan is not reliable verbatim
 
-`internal/engine/runner.go` and `internal/engine/runner_test.go` exist. **Both tests fail:**
+Task 13's plan text is **internally inconsistent** — its Step 3 implementation does not pass
+its own Step 1 test. Two independent reasons, both fixed in `6a3f7c8`:
 
-```
---- FAIL: TestRunnerPlaysThroughAndLoops (5.76s)
---- FAIL: TestRunnerSkipsFailingItemAfterRetry (5.74s)
-    runner_test.go:171: condition not met in time
-```
+- The plan's fake `ProcessRunner` returns instantly. The runner has no pacing of its own; its
+  only throttle is ffmpeg's `-re`. Unthrottled it ran ~2600 items/sec, and the 30-segment
+  window evicted the segments the test asserts on **4 ms** after they appeared.
+- The plan's test expects `b.mkv` in `000002`, but a failed retry consumes a sequence number,
+  so it lands in `000003`. A fresh dir per *attempt* is required — reusing it would make the
+  tailer re-read the failed attempt's partial CSV.
 
-The failure mode looks like the runner advancing position non-deterministically — the debug
-output shows items replaying out of order (`played pos 0` followed by `playing pos 0` again).
-There are also leftover `DEBUG:` `fmt.Print` calls in the code and a `TempDir` cleanup error
-(the runner leaves files open under `movies/` after the test finishes).
+Treat later tasks' plan code the same way: useful as a design, not as something to transcribe.
+Run the tests.
 
-**Start here.** Read Task 13 in the plan (line ~3508), then fix or rewrite. Do not build
-Task 14 on top of a red runner.
+## Two hardening changes beyond the plan (in `6a3f7c8`)
+
+- `minItemInterval` (1 s) floors the item cycle. Never engages during realtime playback; it
+  exists so an input ffmpeg exits on instantly can't hot-spin the loop.
+- `sweepStaleItemDirs` deletes item dirs below the oldest still referenced by a live window,
+  via the new `hls.Manager.LiveURIs()`. Previously `appendAndClean` removed evicted *segments*
+  but never the directory or its CSV/VTT residue — a directory leaked per item played, forever.
+
+**Known, not fixed:** `itemSeq` restarts at 0 on every `NewRunner`, so a restarted channel
+rewrites `000001…` over any stale dirs from the previous run. Worth purging the channel's
+stream dir on runner start — decide this while wiring the supervisor in Task 14.
 
 ## Remaining — Tasks 14–20
 
@@ -117,15 +127,19 @@ Task 14 on top of a red runner.
 ## Test status
 
 ```
-ok    hotpot-iptv/api/channels
-ok    hotpot-iptv/internal/channel/app
 ok    hotpot-iptv/internal/config
-ok    hotpot-iptv/internal/dbtest        (cached — needs Docker to actually run)
-FAIL  hotpot-iptv/internal/engine        <-- Task 13
+ok    hotpot-iptv/internal/engine        (also clean under -race -count=40)
 ok    hotpot-iptv/internal/ffmpeg
 ok    hotpot-iptv/internal/hls
 ok    hotpot-iptv/internal/library
+FAIL  hotpot-iptv/api/channels           ─┐
+FAIL  hotpot-iptv/internal/channel/app    ├ no local Postgres; see gotchas below
+FAIL  hotpot-iptv/internal/dbtest        ─┘
 ```
+
+The three DB-backed failures are environmental, not regressions — they fail identically on a
+clean checkout with `dial unix /var/run/postgresql/.s.PGSQL.5432: no such file or directory`.
+Run them against the remote Docker host.
 
 ## Environment gotchas
 
@@ -134,8 +148,9 @@ ok    hotpot-iptv/internal/library
   `jemma@192.168.77.150` — password is in the local env var `$COFFEE_PASS`.
   Use `sshpass -p "$COFFEE_PASS" ssh jemma@192.168.77.150 ...`, or set
   `DOCKER_HOST=ssh://jemma@192.168.77.150`.
-- The work lives in a **locked git worktree** at `.claude/worktrees/hotpot-impl`.
-  `git worktree list` from the repo root shows it.
+- The worktree at `.claude/worktrees/hotpot-impl` and branch `worktree-hotpot-impl` are
+  **gone**; all work is on `main` in the primary checkout. `origin/wip/task-13-engine` is a
+  superseded WIP branch, safe to delete.
 - Target GPU is a **Quadro M620** — Maxwell-gen NVENC. H.264 only; no HEVC, no AV1.
 
 ## How this was built
