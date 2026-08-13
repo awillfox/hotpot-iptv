@@ -126,28 +126,44 @@ stream dir on runner start — decide this while wiring the supervisor in Task 1
 
 ## Test status
 
+`go test -p 1 ./...` — **all green**, no environment setup needed:
+
 ```
+ok    hotpot-iptv/api/channels
+ok    hotpot-iptv/internal/channel/app
 ok    hotpot-iptv/internal/config
+ok    hotpot-iptv/internal/dbtest
 ok    hotpot-iptv/internal/engine        (also clean under -race -count=40)
 ok    hotpot-iptv/internal/ffmpeg
 ok    hotpot-iptv/internal/hls
 ok    hotpot-iptv/internal/library
-FAIL  hotpot-iptv/api/channels           ─┐
-FAIL  hotpot-iptv/internal/channel/app    ├ no local Postgres; see gotchas below
-FAIL  hotpot-iptv/internal/dbtest        ─┘
+ok    hotpot-iptv/pkg/testdb
 ```
 
-The three DB-backed failures are environmental, not regressions — they fail identically on a
-clean checkout with `dial unix /var/run/postgresql/.s.PGSQL.5432: no such file or directory`.
-Run them against the remote Docker host.
+Use `-p 1`: `pkg/testdb` shares one database and truncates between tests.
 
 ## Environment gotchas
 
-- **Docker is not available on the local WSL2 dev box.** DB tests (testcontainers) and any
-  `docker build` / `compose` work must run against the remote host
-  `jemma@192.168.77.150` — password is in the local env var `$COFFEE_PASS`.
-  Use `sshpass -p "$COFFEE_PASS" ssh jemma@192.168.77.150 ...`, or set
-  `DOCKER_HOST=ssh://jemma@192.168.77.150`.
+- **Postgres is already provisioned** on `192.168.77.150:5432` (PostgreSQL 18), with three
+  separate databases. Credentials live in the gitignored `.env`; copy `.env.example` to start
+  one. Every entry point — the app, `go test`, and `task` — reads `.env` automatically.
+
+  | Database | Used by | Note |
+  |----------|---------|------|
+  | `hotpot` | `PSQL_URL` — the app | schema applied and in sync with `schema.hcl` |
+  | `hotpot_atlas_dev` | `PSQL_DEV_URL` — `task migrate-dev` | Atlas **wipes** it every run |
+  | `hotpot_test` | `PSQL_TEST_URL` — `pkg/testdb` | tests **drop/recreate** every table |
+
+  Run `task migrate-dev-plan` to see a migration before `task migrate-dev` applies it.
+
+- **Docker is not installed on the local WSL2 dev box**, so `docker build` / `compose` work
+  (Task 20) must run against the remote host `jemma@192.168.77.150` — password is in the local
+  env var `$COFFEE_PASS`. Use `sshpass -p "$COFFEE_PASS" ssh jemma@192.168.77.150 ...`, or set
+  `DOCKER_HOST=ssh://jemma@192.168.77.150`. Atlas is installed locally and needs no Docker,
+  since `PSQL_DEV_URL` points at a real database rather than a `docker://` one.
+
+- The server is **PostgreSQL 18** while the plan's compose pins `postgres:16`, and the app
+  connects as `postgres` where compose expects a `hotpot` role. Reconcile both in Task 20.
 - The worktree at `.claude/worktrees/hotpot-impl` and branch `worktree-hotpot-impl` are
   **gone**; all work is on `main` in the primary checkout. `origin/wip/task-13-engine` is a
   superseded WIP branch, safe to delete.
