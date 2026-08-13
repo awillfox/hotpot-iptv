@@ -42,6 +42,28 @@ The compose file assumes an **existing** Postgres reachable at `PSQL_URL`; it
 does not run one. `runtime: nvidia` requires the NVIDIA container runtime.
 Set `ENCODER=software` on a host with no NVIDIA GPU.
 
+## Folder-backed channels
+
+A channel can be pointed at a folder instead of a hand-picked list. Pick one
+with **use as source** in the library browser and the playlist is derived by
+walking that folder recursively, then rescanned every few minutes — drop a film
+in and it joins the rotation on its own.
+
+Rules worth knowing:
+
+- Files already on the playlist keep their position, files that disappear are
+  dropped, and newly found files are appended in random order. Stable positions
+  are what keep the EPG accurate for what is already scheduled.
+- A refresh is adopted **between items only**, so it never cuts a film short.
+- A failed or empty scan is ignored. An unreachable share does not empty a
+  channel that is on air.
+- **The track list is fixed while a channel runs.** `master.m3u8` cannot gain or
+  lose audio/subtitle tracks with players attached, so a newly appeared file
+  carrying a language none of the others had will play, but that track is not
+  advertised until the channel is restarted.
+- Manual reordering is disabled for folder-backed channels, since the next
+  rescan would overwrite it.
+
 ## For TV players
 
 | URL | Purpose |
