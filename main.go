@@ -15,6 +15,7 @@ import (
 
 	"hotpot-iptv/api/channels"
 	"hotpot-iptv/api/library"
+	streamshttp "hotpot-iptv/api/streams/http"
 	"hotpot-iptv/internal/config"
 	"hotpot-iptv/internal/engine"
 	"hotpot-iptv/internal/ffmpeg"
@@ -60,6 +61,7 @@ func main() {
 		if err := sup.RestoreRunning(context.Background()); err != nil {
 			log.Printf("restore running channels: %v", err)
 		}
+		r.Mount("/streams", streamshttp.NewServer(sup, cfg.StreamsPath).NewRouter())
 	} else {
 		log.Print("PSQL_URL is empty: channels API and engine are disabled")
 	}
