@@ -152,6 +152,31 @@ schtasks /run /tn hotpot-pull
 
 `/IT` runs the task inside the interactive session, which has vault access. Confirmed working.
 
+## Beyond the plan: folder-backed channels
+
+Added after Task 20 (`fc39b63`, `2cdcc6a`). A channel may set `source_folder`; its
+playlist is then derived by walking that folder recursively and refreshed on a ticker
+(`folderRefreshEvery`, 5 min) instead of being hand-picked. `NULL`/empty keeps the old
+behaviour, and the source is a variadic `RunnerOption`, so hand-picked channels are
+untouched.
+
+Constraints that are load-bearing — change them and something breaks:
+
+- **Refreshes are adopted only between items** (`adoptPending`), never mid-file.
+- **A failed or empty scan is discarded.** An unreachable share must not empty a channel
+  that is on air.
+- **The rendition union is never recomputed while running.** `master.m3u8` cannot gain or
+  lose tracks with players attached, so a new file with an unseen language plays but that
+  track is not advertised until restart.
+- **The first scan is bounded** to `seedLimit` (10) files. The share holds 1874 videos and
+  one ffprobe over SMB takes ~1.5 s, so an unbounded seed inside the start request was
+  ~47 min and timed out. The background refresh grows the list to the full folder while
+  the channel plays; seeded entries keep their position, the rest append shuffled.
+- Probing is resumable: `ensureProbed` upserts per file and skips unchanged size+mtime, so
+  an interrupted scan is not wasted.
+
+Live on the deployment: channel 1 `default`, `source_folder = "."` (the whole share).
+
 ## Original blocker notes (kept for reference)
 
 Target is `jemma@192.168.77.150` — **JEMMA-SERVER, Windows 11 Pro**, not Linux. Docker
