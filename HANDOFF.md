@@ -2,7 +2,8 @@
 
 **Last updated:** 2026-08-13
 **Branch:** `main`
-**State:** Tasks 1–13 of 20 complete and committed. **Task 14 is next.**
+**State:** All 20 tasks implemented and committed. Deployment to the target host is
+blocked on a Docker credential issue — see *Deployment* below.
 
 ---
 
@@ -82,6 +83,13 @@ Env (viper `AutomaticEnv`): `PORT=8080`, `PSQL_URL`, `MEDIA_PATH=/media`,
 | 11 | FFmpeg process runner (progress, stall watchdog) | `de99872` |
 | 12 | Segment-list CSV tailer | `6de4a46`, fix `c687e28` |
 | 13 | Channel runner (engine core) | `6a3f7c8` |
+| 14 | Supervisor + SQL store/loader + main wiring | `6eca988` |
+| 15 | HLS delivery HTTP (`/streams`) | `32f993e` |
+| 16 | Control API (start/stop/status) | `99a40cf` |
+| 17 | EPG (XMLTV) + M3U export | `4112cb4` |
+| 18 | Web UI — layout + channels page | `03b3bb4` |
+| 19 | Web UI — dashboard + preview player | `93ddc9f` |
+| 20 | Docker, compose, e2e media, README | `2650294` |
 
 ## Careful: the plan is not reliable verbatim
 
@@ -110,17 +118,39 @@ Run the tests.
 rewrites `000001…` over any stale dirs from the previous run. Worth purging the channel's
 stream dir on runner start — decide this while wiring the supervisor in Task 14.
 
-## Remaining — Tasks 14–20
+## Deployment — blocked on the host, not on the code
 
-| # | Task | Plan line |
-|---|------|-----------|
-| 14 | Supervisor + SQL store/loader + main wiring | ~3955 |
-| 15 | HLS delivery HTTP (`/streams`) | ~4341 |
-| 16 | Control API (start/stop/status, enriched list) | ~4541 |
-| 17 | EPG (XMLTV) + M3U export | ~4769 |
-| 18 | Web UI — layout + channels page | ~5171 |
-| 19 | Web UI — dashboard + preview player | ~5485 |
-| 20 | Docker, compose, e2e media, README | ~5624 |
+Target is `jemma@192.168.77.150` — **JEMMA-SERVER, Windows 11 Pro**, not Linux. Docker
+Desktop 29.5.3 with a `linux/x86_64` daemon, `nvidia-container-runtime` registered, and the
+expected Quadro M620 (driver 582.53, 2 GB). SSH lands in **PowerShell**, so `&&` / `||`
+chains fail and remote commands need PowerShell syntax.
+
+Source is staged at `C:\Users\Jemma\hotpot-iptv` and `docker compose config` validates there.
+
+**The blocker:** every registry pull fails with
+`error getting credentials — A specified logon session does not exist`. Docker's credential
+helper needs an interactive Windows logon and an SSH session cannot provide one. This is not
+project-specific — plain `docker pull hello-world` fails identically. Pointing `DOCKER_CONFIG`
+and `docker --config` at a helper-free config makes no difference. Non-registry commands
+(`docker ps`, `docker images`) work fine.
+
+`golang:1.26-alpine` is already cached on the host; `jrottenberg/ffmpeg:7.1-nvidia2404` is not.
+
+**To unblock, from an interactive session on that machine (RDP or console):**
+
+```powershell
+docker pull jrottenberg/ffmpeg:7.1-nvidia2404
+docker pull golang:1.26
+cd $env:USERPROFILE\hotpot-iptv
+docker compose up -d --build
+```
+
+Once both images are cached the build needs no registry access, and it can be driven over
+SSH again.
+
+**Compose omits the `db` service the plan specified.** That host already runs
+`postgis/postgis:18-3.6` on 5432 — the database `PSQL_URL` points at — so a second one would
+collide on the port and split the data across two databases.
 
 ---
 
