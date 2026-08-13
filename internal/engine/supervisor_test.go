@@ -18,6 +18,10 @@ func (m memLoader) Load(context.Context, int32) (ChannelSpec, int32, error) {
 
 func (m memLoader) RunningChannelIDs(context.Context) ([]int32, error) { return nil, nil }
 
+func (m memLoader) SourceFor(context.Context, int32) (ItemSource, time.Duration, bool) {
+	return nil, 0, false // hand-picked playlist
+}
+
 func TestSupervisorStartStop(t *testing.T) {
 	setItemFloor(t, 10*time.Millisecond)
 	streams := t.TempDir()

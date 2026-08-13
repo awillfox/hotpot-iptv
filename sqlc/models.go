@@ -19,6 +19,7 @@ type Channel struct {
 	VideoBitrateK int32
 	CreatedAt     pgtype.Timestamptz
 	DeletedAt     pgtype.Timestamptz
+	SourceFolder  pgtype.Text
 }
 
 type ChannelEvent struct {

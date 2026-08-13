@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"hotpot-iptv/internal/ffmpeg"
 	"hotpot-iptv/sqlc"
@@ -21,12 +22,32 @@ type LoaderConfig struct {
 // SQLLoader turns a channel row plus its playlist and cached probes into the
 // ChannelSpec a Runner needs. It implements ChannelLoader.
 type SQLLoader struct {
-	q   *sqlc.Queries
-	cfg LoaderConfig
+	q      *sqlc.Queries
+	setter PlaylistSetter
+	cfg    LoaderConfig
 }
 
-func NewSQLLoader(q *sqlc.Queries, cfg LoaderConfig) *SQLLoader {
-	return &SQLLoader{q: q, cfg: cfg}
+// NewSQLLoader takes a PlaylistSetter so folder-backed channels can persist
+// their derived playlist through the same write path the API uses. Pass nil
+// when only hand-picked channels are in play.
+func NewSQLLoader(q *sqlc.Queries, setter PlaylistSetter, cfg LoaderConfig) *SQLLoader {
+	return &SQLLoader{q: q, setter: setter, cfg: cfg}
+}
+
+// folderRefreshEvery is how often a folder-backed channel rescans. Deliberately
+// slow: a scan probes any new file over the network, and picking up a film a
+// few minutes late costs nothing.
+const folderRefreshEvery = 5 * time.Minute
+
+func (l *SQLLoader) SourceFor(ctx context.Context, channelID int32) (ItemSource, time.Duration, bool) {
+	if l.setter == nil {
+		return nil, 0, false
+	}
+	ch, err := l.q.GetChannel(ctx, channelID)
+	if err != nil || !ch.SourceFolder.Valid || ch.SourceFolder.String == "" {
+		return nil, 0, false
+	}
+	return NewFolderSource(l.q, l.setter, l.cfg, channelID, ch.SourceFolder.String), folderRefreshEvery, true
 }
 
 func (l *SQLLoader) Load(ctx context.Context, channelID int32) (ChannelSpec, int32, error) {
@@ -39,7 +60,21 @@ func (l *SQLLoader) Load(ctx context.Context, channelID int32) (ChannelSpec, int
 		return ChannelSpec{}, 0, fmt.Errorf("list playlist: %w", err)
 	}
 	if len(rows) == 0 {
-		return ChannelSpec{}, 0, fmt.Errorf("channel %q has an empty playlist", ch.Slug)
+		// A folder-backed channel has no rows until a scan has run, and the
+		// scan only starts once the runner is up. Seed it here so the first
+		// start works. This blocks on probing the folder, which is why the
+		// periodic refresh afterwards runs in the background instead.
+		if src, _, ok := l.SourceFor(ctx, channelID); ok {
+			if _, err := src.Items(ctx); err != nil {
+				return ChannelSpec{}, 0, fmt.Errorf("scan source folder: %w", err)
+			}
+			if rows, err = l.q.ListPlaylistItems(ctx, channelID); err != nil {
+				return ChannelSpec{}, 0, fmt.Errorf("list playlist: %w", err)
+			}
+		}
+		if len(rows) == 0 {
+			return ChannelSpec{}, 0, fmt.Errorf("channel %q has an empty playlist", ch.Slug)
+		}
 	}
 
 	// One batched probe lookup for the whole playlist rather than a query per

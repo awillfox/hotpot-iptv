@@ -23,6 +23,12 @@ table "channels" {
     type    = boolean
     default = true
   }
+  # When set, the playlist is derived by walking this folder (relative to
+  # MEDIA_PATH) rather than being hand-picked. NULL keeps the manual behaviour.
+  column "source_folder" {
+    null = true
+    type = text
+  }
   column "video_width" {
     null    = false
     type    = integer

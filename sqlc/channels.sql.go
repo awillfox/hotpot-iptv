@@ -7,12 +7,14 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createChannel = `-- name: CreateChannel :one
-INSERT INTO channels (name, number, slug, video_width, video_height, video_bitrate_k)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, name, number, slug, enabled, video_width, video_height, video_bitrate_k, created_at, deleted_at
+INSERT INTO channels (name, number, slug, video_width, video_height, video_bitrate_k, source_folder)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, name, number, slug, enabled, video_width, video_height, video_bitrate_k, created_at, deleted_at, source_folder
 `
 
 type CreateChannelParams struct {
@@ -22,6 +24,7 @@ type CreateChannelParams struct {
 	VideoWidth    int32
 	VideoHeight   int32
 	VideoBitrateK int32
+	SourceFolder  pgtype.Text
 }
 
 func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) (Channel, error) {
@@ -32,6 +35,7 @@ func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) (C
 		arg.VideoWidth,
 		arg.VideoHeight,
 		arg.VideoBitrateK,
+		arg.SourceFolder,
 	)
 	var i Channel
 	err := row.Scan(
@@ -45,12 +49,13 @@ func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) (C
 		&i.VideoBitrateK,
 		&i.CreatedAt,
 		&i.DeletedAt,
+		&i.SourceFolder,
 	)
 	return i, err
 }
 
 const getChannel = `-- name: GetChannel :one
-SELECT id, name, number, slug, enabled, video_width, video_height, video_bitrate_k, created_at, deleted_at FROM channels WHERE id = $1 AND deleted_at IS NULL
+SELECT id, name, number, slug, enabled, video_width, video_height, video_bitrate_k, created_at, deleted_at, source_folder FROM channels WHERE id = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetChannel(ctx context.Context, id int32) (Channel, error) {
@@ -67,12 +72,13 @@ func (q *Queries) GetChannel(ctx context.Context, id int32) (Channel, error) {
 		&i.VideoBitrateK,
 		&i.CreatedAt,
 		&i.DeletedAt,
+		&i.SourceFolder,
 	)
 	return i, err
 }
 
 const getChannelBySlug = `-- name: GetChannelBySlug :one
-SELECT id, name, number, slug, enabled, video_width, video_height, video_bitrate_k, created_at, deleted_at FROM channels WHERE slug = $1 AND deleted_at IS NULL
+SELECT id, name, number, slug, enabled, video_width, video_height, video_bitrate_k, created_at, deleted_at, source_folder FROM channels WHERE slug = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetChannelBySlug(ctx context.Context, slug string) (Channel, error) {
@@ -89,12 +95,13 @@ func (q *Queries) GetChannelBySlug(ctx context.Context, slug string) (Channel, e
 		&i.VideoBitrateK,
 		&i.CreatedAt,
 		&i.DeletedAt,
+		&i.SourceFolder,
 	)
 	return i, err
 }
 
 const listChannels = `-- name: ListChannels :many
-SELECT id, name, number, slug, enabled, video_width, video_height, video_bitrate_k, created_at, deleted_at FROM channels WHERE deleted_at IS NULL ORDER BY number
+SELECT id, name, number, slug, enabled, video_width, video_height, video_bitrate_k, created_at, deleted_at, source_folder FROM channels WHERE deleted_at IS NULL ORDER BY number
 `
 
 func (q *Queries) ListChannels(ctx context.Context) ([]Channel, error) {
@@ -117,6 +124,7 @@ func (q *Queries) ListChannels(ctx context.Context) ([]Channel, error) {
 			&i.VideoBitrateK,
 			&i.CreatedAt,
 			&i.DeletedAt,
+			&i.SourceFolder,
 		); err != nil {
 			return nil, err
 		}
@@ -140,9 +148,10 @@ func (q *Queries) SoftDeleteChannel(ctx context.Context, id int32) error {
 const updateChannel = `-- name: UpdateChannel :one
 UPDATE channels
 SET name = $2, number = $3, slug = $4, enabled = $5,
-    video_width = $6, video_height = $7, video_bitrate_k = $8
+    video_width = $6, video_height = $7, video_bitrate_k = $8,
+    source_folder = $9
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, name, number, slug, enabled, video_width, video_height, video_bitrate_k, created_at, deleted_at
+RETURNING id, name, number, slug, enabled, video_width, video_height, video_bitrate_k, created_at, deleted_at, source_folder
 `
 
 type UpdateChannelParams struct {
@@ -154,6 +163,7 @@ type UpdateChannelParams struct {
 	VideoWidth    int32
 	VideoHeight   int32
 	VideoBitrateK int32
+	SourceFolder  pgtype.Text
 }
 
 func (q *Queries) UpdateChannel(ctx context.Context, arg UpdateChannelParams) (Channel, error) {
@@ -166,6 +176,7 @@ func (q *Queries) UpdateChannel(ctx context.Context, arg UpdateChannelParams) (C
 		arg.VideoWidth,
 		arg.VideoHeight,
 		arg.VideoBitrateK,
+		arg.SourceFolder,
 	)
 	var i Channel
 	err := row.Scan(
@@ -179,6 +190,7 @@ func (q *Queries) UpdateChannel(ctx context.Context, arg UpdateChannelParams) (C
 		&i.VideoBitrateK,
 		&i.CreatedAt,
 		&i.DeletedAt,
+		&i.SourceFolder,
 	)
 	return i, err
 }

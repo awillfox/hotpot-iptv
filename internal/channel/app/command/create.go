@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"hotpot-iptv/internal/channel/domain/channel"
 	"hotpot-iptv/sqlc"
 )
@@ -21,6 +23,7 @@ type CreateInput struct {
 	VideoWidth    int32
 	VideoHeight   int32
 	VideoBitrateK int32
+	SourceFolder  string
 }
 
 func (h CreateHandler) Handle(ctx context.Context, in CreateInput) (channel.Channel, error) {
@@ -39,6 +42,7 @@ func (h CreateHandler) Handle(ctx context.Context, in CreateInput) (channel.Chan
 	sq, err := h.queries.CreateChannel(ctx, sqlc.CreateChannelParams{
 		Name: in.Name, Number: in.Number, Slug: in.Slug,
 		VideoWidth: in.VideoWidth, VideoHeight: in.VideoHeight, VideoBitrateK: in.VideoBitrateK,
+		SourceFolder: pgtype.Text{String: in.SourceFolder, Valid: in.SourceFolder != ""},
 	})
 	if err != nil {
 		return channel.Channel{}, fmt.Errorf("create channel: %w", err)

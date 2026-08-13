@@ -17,6 +17,7 @@ type ChannelRequest struct {
 	VideoWidth    int32  `json:"video_width"`
 	VideoHeight   int32  `json:"video_height"`
 	VideoBitrateK int32  `json:"video_bitrate_k"`
+	SourceFolder  string `json:"source_folder"`
 }
 
 func validate(in ChannelRequest) error {
@@ -40,6 +41,7 @@ func (c Client) CreateChannel(ctx context.Context, in ChannelRequest) (channel.C
 	return c.app.Commands.Create.Handle(ctx, command.CreateInput{
 		Name: in.Name, Number: in.Number, Slug: in.Slug,
 		VideoWidth: in.VideoWidth, VideoHeight: in.VideoHeight, VideoBitrateK: in.VideoBitrateK,
+		SourceFolder: in.SourceFolder,
 	})
 }
 
@@ -54,6 +56,7 @@ func (c Client) UpdateChannel(ctx context.Context, id int32, in ChannelRequest) 
 	return c.app.Commands.Update.Handle(ctx, command.UpdateInput{
 		ID: id, Name: in.Name, Number: in.Number, Slug: in.Slug, Enabled: enabled,
 		VideoWidth: in.VideoWidth, VideoHeight: in.VideoHeight, VideoBitrateK: in.VideoBitrateK,
+		SourceFolder: in.SourceFolder,
 	})
 }
 

@@ -62,13 +62,17 @@ type Runner struct {
 	proc     ProcessRunner
 	mgr      *hls.Manager
 
+	source       ItemSource // nil for hand-picked playlists
+	refreshEvery time.Duration
+	pending      pendingItems
+
 	itemSeq    int64
 	nowPlaying atomic.Value // string
 	offsetUs   atomic.Int64
 	pos        atomic.Int32
 }
 
-func NewRunner(spec ChannelSpec, startPos int32, store Store, proc ProcessRunner) *Runner {
+func NewRunner(spec ChannelSpec, startPos int32, store Store, proc ProcessRunner, opts ...RunnerOption) *Runner {
 	probes := make([]ffmpeg.ProbeResult, 0, len(spec.Items))
 	for _, it := range spec.Items {
 		probes = append(probes, it.Probe)
@@ -79,6 +83,9 @@ func NewRunner(spec ChannelSpec, startPos int32, store Store, proc ProcessRunner
 	})
 	r := &Runner{spec: spec, startPos: startPos, store: store, proc: proc, mgr: mgr}
 	r.nowPlaying.Store("")
+	for _, opt := range opts {
+		opt(r)
+	}
 	return r
 }
 
@@ -99,8 +106,15 @@ func (r *Runner) Run(ctx context.Context) {
 	backoff := backoffBase
 	r.purgeItemDirs()
 
+	if r.source != nil && r.refreshEvery > 0 {
+		go r.refreshLoop(ctx)
+	}
+
 	for ctx.Err() == nil {
 		iterStart := time.Now()
+		// Adopt a scanned playlist only here, between items, so a refresh
+		// never cuts a file short.
+		pos = r.adoptPending(pos)
 		item := r.spec.Items[pos]
 		r.pos.Store(pos)
 		r.nowPlaying.Store(item.Path)

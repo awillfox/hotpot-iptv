@@ -14,6 +14,7 @@ CREATE TABLE "public"."channels" (
   "video_bitrate_k" integer NOT NULL DEFAULT 5000,
   "created_at" timestamptz NOT NULL DEFAULT now(),
   "deleted_at" timestamptz NULL,
+  "source_folder" text NULL,
   PRIMARY KEY ("id")
 );
 -- Create index "channels_number_key" to table: "channels"

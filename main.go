@@ -18,6 +18,7 @@ import (
 	exporthttp "hotpot-iptv/api/export/http"
 	"hotpot-iptv/api/library"
 	streamshttp "hotpot-iptv/api/streams/http"
+	"hotpot-iptv/internal/channel/app/command"
 	"hotpot-iptv/internal/config"
 	"hotpot-iptv/internal/engine"
 	"hotpot-iptv/internal/ffmpeg"
@@ -55,8 +56,9 @@ func main() {
 		prober := ffmpeg.CLI{FFprobePath: cfg.FFprobePath}
 
 		q := sqlc.New(pool)
+		setter := command.NewSetPlaylistHandler(pool, q, prober, cfg.MediaPath)
 		sup = engine.NewSupervisor(
-			engine.NewSQLLoader(q, engine.LoaderConfig{
+			engine.NewSQLLoader(q, setter, engine.LoaderConfig{
 				MediaPath: cfg.MediaPath, StreamsPath: cfg.StreamsPath,
 				Encoder: cfg.Encoder, SegmentSec: cfg.SegmentSeconds, Window: cfg.WindowSegments,
 			}),

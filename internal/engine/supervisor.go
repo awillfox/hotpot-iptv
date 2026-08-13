@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"hotpot-iptv/internal/hls"
 )
@@ -11,6 +12,9 @@ import (
 type ChannelLoader interface {
 	Load(ctx context.Context, channelID int32) (ChannelSpec, int32, error)
 	RunningChannelIDs(ctx context.Context) ([]int32, error)
+	// SourceFor returns a live playlist source for folder-backed channels.
+	// ok is false for hand-picked playlists, which never refresh.
+	SourceFor(ctx context.Context, channelID int32) (src ItemSource, every time.Duration, ok bool)
 }
 
 type ChannelStatus struct {
@@ -51,7 +55,11 @@ func (s *Supervisor) Start(ctx context.Context, channelID int32) error {
 	if err != nil {
 		return fmt.Errorf("load channel %d: %w", channelID, err)
 	}
-	runner := NewRunner(spec, startPos, s.store, s.proc)
+	var opts []RunnerOption
+	if src, every, ok := s.loader.SourceFor(ctx, channelID); ok {
+		opts = append(opts, WithItemSource(src, every))
+	}
+	runner := NewRunner(spec, startPos, s.store, s.proc, opts...)
 
 	// The runner outlives the request that started it, so it gets a fresh
 	// context rather than ctx. Stop/StopAll are the only things that end it —

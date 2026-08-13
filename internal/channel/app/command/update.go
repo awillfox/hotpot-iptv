@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"hotpot-iptv/internal/channel/domain/channel"
 	"hotpot-iptv/sqlc"
@@ -26,6 +27,7 @@ type UpdateInput struct {
 	VideoWidth    int32
 	VideoHeight   int32
 	VideoBitrateK int32
+	SourceFolder  string
 }
 
 func (h UpdateHandler) Handle(ctx context.Context, in UpdateInput) (channel.Channel, error) {
@@ -35,6 +37,7 @@ func (h UpdateHandler) Handle(ctx context.Context, in UpdateInput) (channel.Chan
 	sq, err := h.queries.UpdateChannel(ctx, sqlc.UpdateChannelParams{
 		ID: in.ID, Name: in.Name, Number: in.Number, Slug: in.Slug, Enabled: in.Enabled,
 		VideoWidth: in.VideoWidth, VideoHeight: in.VideoHeight, VideoBitrateK: in.VideoBitrateK,
+		SourceFolder: pgtype.Text{String: in.SourceFolder, Valid: in.SourceFolder != ""},
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return channel.Channel{}, channel.ErrNotFound

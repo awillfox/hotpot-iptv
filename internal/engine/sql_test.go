@@ -58,7 +58,7 @@ func TestSQLLoaderBuildsSpecFromDatabase(t *testing.T) {
 	q := sqlc.New(pool)
 	ch := seedChannel(t, q)
 
-	loader := NewSQLLoader(q, LoaderConfig{
+	loader := NewSQLLoader(q, nil, LoaderConfig{
 		MediaPath: "/media", StreamsPath: "/streams", Encoder: "software",
 		SegmentSec: 4, Window: 30,
 	})
@@ -86,7 +86,7 @@ func TestSQLLoaderRejectsEmptyPlaylist(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	loader := NewSQLLoader(q, LoaderConfig{MediaPath: "/media"})
+	loader := NewSQLLoader(q, nil, LoaderConfig{MediaPath: "/media"})
 	_, _, err = loader.Load(context.Background(), ch.ID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "empty playlist")
@@ -99,7 +99,7 @@ func TestSQLStoreRoundTripsStateAndDrivesRestore(t *testing.T) {
 	ctx := context.Background()
 
 	store := NewSQLStore(q)
-	loader := NewSQLLoader(q, LoaderConfig{MediaPath: "/media"})
+	loader := NewSQLLoader(q, nil, LoaderConfig{MediaPath: "/media"})
 
 	// Nothing running yet.
 	ids, err := loader.RunningChannelIDs(ctx)

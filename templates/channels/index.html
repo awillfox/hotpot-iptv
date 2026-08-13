@@ -16,6 +16,20 @@
       <label class="block">Number <input id="f-number" type="number" class="w-full bg-slate-800 rounded px-3 py-2 mt-1"></label>
       <label class="block">Bitrate (kbps) <input id="f-bitrate" type="number" value="5000" class="w-full bg-slate-800 rounded px-3 py-2 mt-1"></label>
     </div>
+    <div class="mb-4 bg-slate-800/60 rounded p-3">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-sm text-slate-400">Source folder</span>
+        <span id="f-source" class="font-mono text-sm flex-1 truncate">—</span>
+        <button id="pick-source" class="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-sm">Pick folder…</button>
+        <button id="clear-source" class="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-sm">Clear</button>
+      </div>
+      <p class="text-xs text-slate-500 mt-2">
+        With a source folder the playlist is rebuilt from that folder (including
+        subfolders) and rescanned every few minutes, so new films appear on their own.
+        New tracks in new files are only advertised after a restart.
+      </p>
+    </div>
+
     <h3 class="font-semibold mb-2">Playlist</h3>
     <ol id="playlist" class="mb-2 space-y-1"></ol>
     <button id="add-files" class="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-sm mb-4">+ Add files</button>
@@ -42,6 +56,12 @@
 <script>
 let playlist = [];
 let browserPath = '';
+let sourceFolder = '';
+
+function renderSource() {
+  $('f-source').textContent = sourceFolder || '—';
+  renderPlaylist();
+}
 
 // Paths and names are user data. They are written as escaped text and carried
 // in data-* attributes, never interpolated into inline handlers -- real files
@@ -53,7 +73,7 @@ function renderChannels(chs) {
       <span class="text-slate-500 w-8">${esc(c.number)}</span>
       <div class="flex-1 min-w-0">
         <div class="font-semibold truncate">${esc(c.name)}</div>
-        <div class="text-sm text-slate-400 truncate">${esc(c.slug)} ·
+        <div class="text-sm text-slate-400 truncate">${c.source_folder ? '📁 ' + esc(c.source_folder) + ' · ' : ''}${esc(c.slug)} ·
           ${esc(c.video_width)}x${esc(c.video_height)} @ ${esc(c.video_bitrate_k)}k
           ${c.status
             ? '<span class="text-green-400">● ' + esc(c.status.state) + '</span>'
@@ -78,6 +98,15 @@ async function loadChannels() {
 }
 
 function renderPlaylist() {
+  if (sourceFolder) {
+    // Manual order would be overwritten by the next rescan, so it is disabled.
+    $('playlist').innerHTML = playlist.length
+      ? playlist.map(p => `<li class="bg-slate-800 rounded px-2 py-1 text-sm font-mono truncate opacity-70">${esc(p)}</li>`).join('')
+      : '<li class="text-slate-500 text-sm">Derived from the source folder on save.</li>';
+    $('add-files').classList.add('hidden');
+    return;
+  }
+  $('add-files').classList.remove('hidden');
   $('playlist').innerHTML = playlist.map((p, i) => `
     <li class="flex items-center gap-2 bg-slate-800 rounded px-2 py-1 text-sm font-mono">
       <span class="flex-1 truncate">${esc(p)}</span>
@@ -104,7 +133,8 @@ $('playlist').addEventListener('click', e => {
 function openEditor() {
   $('f-id').value = ''; $('f-name').value = ''; $('f-number').value = '';
   $('f-bitrate').value = '5000'; $('editor-title').textContent = 'New channel';
-  $('editor-error').textContent = ''; playlist = []; renderPlaylist(); show('editor');
+  $('editor-error').textContent = ''; playlist = []; sourceFolder = '';
+  renderSource(); show('editor');
 }
 
 async function editChannel(id) {
@@ -113,8 +143,9 @@ async function editChannel(id) {
   $('f-bitrate').value = c.video_bitrate_k;
   $('editor-title').textContent = 'Edit ' + c.name; // textContent, so no escaping needed
   $('editor-error').textContent = '';
+  sourceFolder = c.source_folder || '';
   playlist = (await api(`/channels/${id}/playlist`) || []).map(i => i.path);
-  renderPlaylist(); show('editor');
+  renderSource(); show('editor');
 }
 
 async function saveChannel() {
@@ -122,12 +153,15 @@ async function saveChannel() {
     const body = {
       name: $('f-name').value, number: +$('f-number').value,
       video_bitrate_k: +$('f-bitrate').value, enabled: true,
+      source_folder: sourceFolder,
     };
     const id = $('f-id').value;
     const ch = id
       ? await api(`/channels/${id}`, { method: 'PUT', body: JSON.stringify(body) })
       : await api('/channels', { method: 'POST', body: JSON.stringify(body) });
-    await api(`/channels/${ch.id}/playlist`, { method: 'PUT', body: JSON.stringify({ paths: playlist }) });
+    if (!sourceFolder) {
+      await api(`/channels/${ch.id}/playlist`, { method: 'PUT', body: JSON.stringify({ paths: playlist }) });
+    }
     hide('editor');
     loadChannels();
   } catch (e) { $('editor-error').textContent = e.message; }
@@ -143,7 +177,10 @@ async function openBrowser(path) {
     const up = browserPath
       ? `<li><button data-dir="${esc(parent)}" class="text-slate-400">⬅ ..</button></li>` : '';
     $('browser-list').innerHTML = up + (data.entries || []).map(e => e.is_dir
-      ? `<li><button data-dir="${esc(e.path)}" class="text-orange-300">📁 ${esc(e.name)}</button></li>`
+      ? `<li class="flex items-center gap-2">
+           <button data-dir="${esc(e.path)}" class="text-orange-300 flex-1 text-left truncate">📁 ${esc(e.name)}</button>
+           <button data-src="${esc(e.path)}" class="text-xs bg-slate-700 hover:bg-slate-600 px-2 py-0.5 rounded">use as source</button>
+         </li>`
       : `<li><button data-file="${esc(e.path)}" class="hover:text-orange-300 text-left">🎬 ${esc(e.name)}</button></li>`
     ).join('') || '<li class="text-slate-500">empty</li>';
     show('browser');
@@ -153,6 +190,12 @@ async function openBrowser(path) {
 $('browser-list').addEventListener('click', e => {
   const b = e.target.closest('button');
   if (!b) return;
+  if (b.dataset.src !== undefined) {
+    sourceFolder = b.dataset.src;
+    hide('browser');
+    renderSource();
+    return;
+  }
   if (b.dataset.dir !== undefined) return openBrowser(b.dataset.dir);
   if (b.dataset.file !== undefined) { playlist.push(b.dataset.file); renderPlaylist(); }
 });
@@ -180,6 +223,8 @@ $('new-channel').addEventListener('click', openEditor);
 $('editor-cancel').addEventListener('click', () => hide('editor'));
 $('editor-save').addEventListener('click', saveChannel);
 $('add-files').addEventListener('click', () => openBrowser(''));
+$('pick-source').addEventListener('click', () => openBrowser(''));
+$('clear-source').addEventListener('click', () => { sourceFolder = ''; renderSource(); });
 $('browser-close').addEventListener('click', () => hide('browser'));
 
 loadChannels();
