@@ -64,6 +64,44 @@ Rules worth knowing:
 - Manual reordering is disabled for folder-backed channels, since the next
   rescan would overwrite it.
 
+## Running natively (Windows, for real NVENC)
+
+The binary is pure Go with `CGO_ENABLED=0` and templates embedded, so it is a
+single file. On Windows this is the only way to reach NVENC — see Limits.
+
+```sh
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags='-s -w' -o hotpot.exe .
+```
+
+Put `hotpot.exe` and a `.env` in the same directory (config reads `./.env`
+relative to the working directory) and install it as a service:
+
+```powershell
+nssm install  hotpot-iptv D:\hotpot-iptv\hotpot.exe
+nssm set      hotpot-iptv AppDirectory D:\hotpot-iptv
+nssm set      hotpot-iptv AppStdout    D:\hotpot-iptv\service.log
+nssm set      hotpot-iptv AppStderr    D:\hotpot-iptv\service.log
+nssm set      hotpot-iptv Start        SERVICE_AUTO_START
+nssm set      hotpot-iptv ObjectName   .\<user> <password>
+nssm start    hotpot-iptv
+```
+
+Three things that are easy to get wrong:
+
+- **Use a UNC path for `MEDIA_PATH`, not a mapped drive letter.** Drive letters
+  are per-logon-session and invisible to a service; `\\host\share` is not.
+- **Run the service as a user that can reach the share.** `LocalSystem` cannot.
+- **Add a firewall rule.** Docker publishes ports with its own rules; a native
+  process gets none, so it will answer on `127.0.0.1` and nothing else:
+  `New-NetFirewallRule -DisplayName "hotpot-iptv" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow`
+
+Confirm the GPU is really being used, rather than trusting that `h264_nvenc`
+was accepted:
+
+```powershell
+nvidia-smi --query-gpu=utilization.encoder --format=csv
+```
+
 ## For TV players
 
 | URL | Purpose |
@@ -125,10 +163,10 @@ several tasks' sample code does not match their own tests. Run the tests.
   2 GB of VRAM is enough for one or two 1080p sessions, not many.
 - **NVENC does not work inside Docker on Windows.** Docker Desktop runs
   containers under WSL2, whose paravirtualised GPU (`/dev/dxg`) exposes CUDA and
-  NVML — so `nvidia-smi` works and `h264_nvenc` is listed — but not
-  `libnvidia-encode.so.1`, so opening the encoder fails. Use `ENCODER=software`
-  there. Real NVENC needs a Linux host with the NVIDIA Container Toolkit, or a
-  native (non-container) deployment.
+  NVML — so `nvidia-smi` works and `h264_nvenc` is listed — but the WSL driver
+  ships no `libnvidia-encode.so.1`, so opening the encoder fails. There is
+  nothing to mount; the file does not exist on the host side either. Use
+  `ENCODER=software` in a container on Windows, or run natively (below).
 - Single video rendition per channel — no adaptive bitrate ladder.
 - Bitmap subtitles (PGS/VOBSUB) are skipped, not OCR'd or burned in.
 - No auth on any endpoint. This is a LAN appliance; do not expose it.

@@ -118,7 +118,53 @@ Run the tests.
 rewrites `000001…` over any stale dirs from the previous run. Worth purging the channel's
 stream dir on runner start — decide this while wiring the supervisor in Task 14.
 
-## Deployment — LIVE at http://192.168.77.150:5004
+## Deployment — LIVE, native Windows service, NVENC working
+
+**`http://192.168.77.150:5004`** — `D:\hotpot-iptv\hotpot.exe`, run by NSSM as service
+**`hotpot-iptv`** (auto-start, `ObjectName .\Jemma`, logs to `D:\hotpot-iptv\service.log`).
+
+The Docker deployment is **stopped** (`docker compose down`); its files remain at
+`C:\Users\Jemma\hotpot-iptv` if you ever want the container path back.
+
+Why native: **NVENC cannot work in a container on this host.** Docker Desktop runs
+containers under WSL2, and the WSL driver directory ships only `libcuda.so.1`,
+`libnvidia-ml.so.1` and the PTX JIT compiler — there is no `libnvidia-encode.so.1`
+anywhere, so there is nothing to bind-mount. `nvidia-smi` working inside the container is
+misleading: that is NVML, not the encoder. Native ffmpeg encodes fine.
+
+Verified on the GPU, not merely accepted by ffmpeg:
+
+```
+nvidia-smi --query-compute-apps  -> ...\Gyan.FFmpeg\...\ffmpeg.exe
+utilization.gpu 1 %   utilization.encoder 15 %   memory.used 149 MiB
+```
+
+Encoder busy with compute near idle is the right signature — the work is on the dedicated
+NVENC block, not the shaders.
+
+Native `.env` at `D:\hotpot-iptv\.env`: `PORT=5004`, `ENCODER=nvenc`,
+`MEDIA_PATH=\\192.168.77.155\Movies`, `STREAMS_PATH=D:\hotpot-iptv\streams`, same
+`PSQL_URL` as before.
+
+Three host-specific traps, all already solved:
+
+- **UNC, not the drive letter.** Session 1 already maps that share as `Y:`, which is why
+  `net use` returns error 1219 (already connected under another user). Drive letters are
+  per-logon-session and invisible to services; the UNC path is not. Service reads 655
+  entries fine.
+- **Firewall.** Docker published ports with its own rules; a native process gets none, so
+  it answered on `127.0.0.1` and nothing remote. Rule `hotpot-iptv 5004` added.
+- **Anything needing the interactive session** — Docker registry pulls, `net use` —
+  must run via `schtasks /IT`, because an SSH session gets its own logon token. See below.
+
+The Windows build needed `internal/ffmpeg/runner.go` split into `proc_unix.go` /
+`proc_windows.go` (`3b311af`): it used `syscall.Setpgid` and `syscall.Kill(-pid)` and would
+not compile for Windows at all. Killing ffmpeg as a *tree* is load-bearing — a surviving
+child holds stdout open and hangs the reader — so Windows uses
+`CREATE_NEW_PROCESS_GROUP` + `taskkill /T`, and a characterisation test pins the behaviour
+on both.
+
+## Previous container deployment (stopped, kept for reference)
 
 Running on JEMMA-SERVER as `hotpot-iptv-app-1`. Verified end-to-end on real media:
 655 library entries over CIFS, a channel started on
@@ -245,18 +291,39 @@ Use `-p 1`: `pkg/testdb` shares one database and truncates between tests.
 
   Run `task migrate-dev-plan` to see a migration before `task migrate-dev` applies it.
 
-- **Docker is not installed on the local WSL2 dev box**, so `docker build` / `compose` work
-  (Task 20) must run against the remote host `jemma@192.168.77.150` — password is in the local
-  env var `$COFFEE_PASS`. Use `sshpass -p "$COFFEE_PASS" ssh jemma@192.168.77.150 ...`, or set
-  `DOCKER_HOST=ssh://jemma@192.168.77.150`. Atlas is installed locally and needs no Docker,
-  since `PSQL_DEV_URL` points at a real database rather than a `docker://` one.
+- **Docker is not installed on the local WSL2 dev box.** Anything container-shaped runs on
+  `jemma@192.168.77.150` — password is in the local env var `$COFFEE_PASS`, used as
+  `sshpass -e ssh jemma@192.168.77.150 ...` (via `SSHPASS`, so it stays out of `ps`). Atlas
+  is installed locally and needs no Docker, since `PSQL_DEV_URL` points at a real database
+  rather than a `docker://` one.
 
-- The server is **PostgreSQL 18** while the plan's compose pins `postgres:16`, and the app
-  connects as `postgres` where compose expects a `hotpot` role. Reconcile both in Task 20.
+- **SSH to that host lands in PowerShell**, so `&&` / `||` chains fail and nested quoting
+  gets mangled. Write scripts locally and `scp` them rather than fighting the quoting.
+
+- **An SSH session gets its own Windows logon token**, which cannot reach the credential
+  vault or that session's drive mappings. Registry pulls and `net use` therefore fail with
+  *"A specified logon session does not exist"* or error 1219 — and logging in at the console
+  does **not** help, because the command has to *run in* that session. The fix that needs no
+  physical access:
+
+  ```powershell
+  schtasks /create /tn <name> /tr "%USERPROFILE%\<script>.cmd" /sc once /st 00:00 /it /f
+  schtasks /run /tn <name>
+  ```
+
+  `/IT` runs it inside the interactive session. Used for the image pulls; confirmed working.
+
+- The server is **PostgreSQL 18** while `docker-compose.yml` pins `postgres:16` in its
+  comments, and the app connects as `postgres` rather than a `hotpot` role. Only matters if
+  the container path is ever revived — the live deployment is native.
 - The worktree at `.claude/worktrees/hotpot-impl` and branch `worktree-hotpot-impl` are
   **gone**; all work is on `main` in the primary checkout. `origin/wip/task-13-engine` is a
   superseded WIP branch, safe to delete.
-- Target GPU is a **Quadro M620** — Maxwell-gen NVENC. H.264 only; no HEVC, no AV1.
+- Target GPU is a **Quadro M620** — Maxwell-gen NVENC. H.264 only; no HEVC, no AV1, and
+  2 GB of VRAM is one or two 1080p sessions, not many. It is in use by the native
+  deployment (`utilization.encoder` confirms it) and unreachable from a container on this
+  host. Check with `nvidia-smi --query-gpu=utilization.encoder --format=csv` rather than
+  trusting that ffmpeg accepted `-c:v h264_nvenc` — it lists the encoder either way.
 
 ## How this was built
 
