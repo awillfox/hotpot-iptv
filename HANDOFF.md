@@ -118,7 +118,41 @@ Run the tests.
 rewrites `000001…` over any stale dirs from the previous run. Worth purging the channel's
 stream dir on runner start — decide this while wiring the supervisor in Task 14.
 
-## Deployment — blocked on the host, not on the code
+## Deployment — LIVE at http://192.168.77.150:5004
+
+Running on JEMMA-SERVER as `hotpot-iptv-app-1`. Verified end-to-end on real media:
+655 library entries over CIFS, a channel started on
+`1.Lara Croft  Tomb Raider (2001)1080p.mkv`, master playlist carrying the full rendition
+union (Thai + 2× English audio, Thai + English subs), 2.1 MB `.ts` segments served, VTT
+segments with the correct `MPEGTS:900000` map, and both exports populated.
+
+Two things differ from the plan and are worth knowing:
+
+- **Port 5004, not 8080.** `obsidian-note-api` already owns 8080 on that host. The published
+  port is now `HTTP_PORT` in `.env` (default 8080); the container still listens on 8080.
+- **`ENCODER=software`, because NVENC cannot work there.** Docker Desktop runs containers
+  under WSL2, and its paravirtualised GPU (`/dev/dxg` is present in the container) exposes
+  CUDA and NVML — `nvidia-smi` reports the M620 correctly and ffmpeg lists `h264_nvenc` — but
+  **not** `libnvidia-encode.so.1`, so the encoder fails to open with
+  `Cannot load libnvidia-encode.so.1`. This is a platform limit, not a config error. Getting
+  real NVENC on that box means either a Linux host with the NVIDIA Container Toolkit, or
+  running the binary natively on Windows — the latter needs `internal/ffmpeg/runner.go`
+  ported, since its process-group kill uses `syscall.Setpgid`/`syscall.Kill` (POSIX-only, so
+  the app does not currently cross-compile to Windows).
+
+**Getting images onto the host.** Registry pulls over SSH fail with
+`A specified logon session does not exist` — Docker's credential helper needs the logged-on
+user's session, and SSH gets its own token. Being logged in at the console is not enough; the
+command must *run in* that session. Workaround that needs no physical access:
+
+```powershell
+schtasks /create /tn hotpot-pull /tr "%USERPROFILE%\hotpot-pull.cmd" /sc once /st 00:00 /it /f
+schtasks /run /tn hotpot-pull
+```
+
+`/IT` runs the task inside the interactive session, which has vault access. Confirmed working.
+
+## Original blocker notes (kept for reference)
 
 Target is `jemma@192.168.77.150` — **JEMMA-SERVER, Windows 11 Pro**, not Linux. Docker
 Desktop 29.5.3 with a `linux/x86_64` daemon, `nvidia-container-runtime` registered, and the

@@ -101,6 +101,12 @@ several tasks' sample code does not match their own tests. Run the tests.
 
 - H.264 only. The target GPU is a Quadro M620 (Maxwell): no HEVC, no AV1, and
   2 GB of VRAM is enough for one or two 1080p sessions, not many.
+- **NVENC does not work inside Docker on Windows.** Docker Desktop runs
+  containers under WSL2, whose paravirtualised GPU (`/dev/dxg`) exposes CUDA and
+  NVML — so `nvidia-smi` works and `h264_nvenc` is listed — but not
+  `libnvidia-encode.so.1`, so opening the encoder fails. Use `ENCODER=software`
+  there. Real NVENC needs a Linux host with the NVIDIA Container Toolkit, or a
+  native (non-container) deployment.
 - Single video rendition per channel — no adaptive bitrate ladder.
 - Bitmap subtitles (PGS/VOBSUB) are skipped, not OCR'd or burned in.
 - No auth on any endpoint. This is a LAN appliance; do not expose it.
