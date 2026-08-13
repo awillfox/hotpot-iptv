@@ -41,3 +41,23 @@ func TestRunContextCancel(t *testing.T) {
 	err := r.Run(ctx, []string{"stall"}, RunOpts{DisableStallWatch: true})
 	require.Error(t, err) // killed by context
 }
+
+// ffmpeg is killed as a process tree, not just as a single process: a surviving
+// child inherits stdout and would keep its write end open, hanging the reader
+// past the deadline. Characterises the behaviour the process-group setup gives
+// us, so the platform split below cannot quietly lose it.
+func TestRunKillsChildProcessesToo(t *testing.T) {
+	r := Runner{FFmpegPath: "testdata/fake_ffmpeg_child.sh", StallTimeout: time.Minute}
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() { done <- r.Run(ctx, []string{"child"}, RunOpts{DisableStallWatch: true}) }()
+
+	select {
+	case err := <-done:
+		require.Error(t, err, "killed by context")
+	case <-time.After(10 * time.Second):
+		t.Fatal("Run hung: a surviving child still holds stdout open")
+	}
+}

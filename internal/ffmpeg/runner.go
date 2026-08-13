@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"syscall"
 	"time"
 )
 
@@ -41,14 +40,13 @@ func (t *tailWriter) Write(p []byte) (int, error) {
 
 func (r Runner) Run(ctx context.Context, args []string, opts RunOpts) error {
 	cmd := exec.CommandContext(ctx, r.FFmpegPath, args...)
-	// Run ffmpeg in its own process group so a kill also reaches any
-	// child processes it spawns (e.g. a shell script's external
-	// commands); otherwise those children can keep stdout's write end
-	// open and Wait/Scan would hang past the deadline.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	killGroup := func() error {
-		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-	}
+	// Killing ffmpeg as a tree rather than a single process is load-bearing:
+	// a surviving child keeps stdout's write end open and Wait/Scan would hang
+	// past the deadline. The mechanism differs per platform (setpgid+SIGKILL on
+	// unix, CREATE_NEW_PROCESS_GROUP+taskkill on windows), so it lives in
+	// proc_unix.go / proc_windows.go.
+	setProcessGroup(cmd)
+	killGroup := func() error { return killProcessTree(cmd) }
 	cmd.Cancel = killGroup
 	stderr := &tailWriter{cap: 4096}
 	cmd.Stderr = stderr
