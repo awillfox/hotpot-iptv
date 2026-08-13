@@ -1,0 +1,41 @@
+{{define "base"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>hotpot-iptv</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.11" integrity="sha384-A1XhMANHciQ8ED89Ap5K0zOdmQKiEeXSjaN0sakNxIzq9Z2YfXV/BwHp7oP3z5ip" crossorigin="anonymous"></script>
+  <script>
+    // Shared helpers. esc() is mandatory for any value that reaches innerHTML:
+    // channel names and media paths are user-controlled, and real filenames in
+    // this library contain apostrophes and non-ASCII text.
+    const $ = id => document.getElementById(id);
+    const show = id => $(id).classList.remove('hidden');
+    const hide = id => $(id).classList.add('hidden');
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    async function api(path, opts = {}) {
+      const res = await fetch('/api/v1' + path, {
+        headers: { 'Content-Type': 'application/json' }, ...opts,
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      return body.data;
+    }
+  </script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+  <nav class="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center gap-6 flex-wrap">
+    <span class="font-bold text-orange-400 text-lg">🍲 hotpot-iptv</span>
+    <a href="/channels" class="hover:text-orange-300">Channels</a>
+    <a href="/dashboard" class="hover:text-orange-300">Dashboard</a>
+    <a href="/preview" class="hover:text-orange-300">Preview</a>
+    <span class="ml-auto text-sm text-slate-400">
+      <a href="/playlist.m3u" class="underline">playlist.m3u</a> ·
+      <a href="/epg.xml" class="underline">epg.xml</a>
+    </span>
+  </nav>
+  <main class="p-6 max-w-6xl mx-auto">{{template "content" .}}</main>
+</body>
+</html>{{end}}

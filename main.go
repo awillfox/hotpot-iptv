@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"embed"
 	"errors"
 	"fmt"
 	"log"
@@ -20,8 +21,12 @@ import (
 	"hotpot-iptv/internal/config"
 	"hotpot-iptv/internal/engine"
 	"hotpot-iptv/internal/ffmpeg"
+	"hotpot-iptv/internal/web"
 	"hotpot-iptv/sqlc"
 )
+
+//go:embed templates
+var templatesFS embed.FS
 
 func main() {
 	cfg, err := config.Load()
@@ -73,6 +78,14 @@ func main() {
 		log.Print("PSQL_URL is empty: channels API and engine are disabled")
 	}
 	r.Mount("/api/v1/library", library.GetHTTPHandler(cfg.MediaPath))
+
+	// Mounted last: it takes the root, so every specific route above must
+	// already be registered. Pages need no database.
+	webSrv, err := web.NewServer(templatesFS)
+	if err != nil {
+		log.Fatalf("parse templates: %v", err)
+	}
+	r.Mount("/", webSrv.NewRouter())
 
 	srv := &http.Server{Addr: fmt.Sprintf(":%d", cfg.Port), Handler: r}
 	go func() {
