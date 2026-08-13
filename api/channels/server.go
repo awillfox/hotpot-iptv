@@ -10,8 +10,8 @@ import (
 	"hotpot-iptv/internal/channel/app/command"
 )
 
-func GetHTTPHandler(pool *pgxpool.Pool, prober command.Prober, mediaPath string) *chi.Mux {
+func GetHTTPHandler(pool *pgxpool.Pool, prober command.Prober, mediaPath string, eng service.Engine) *chi.Mux {
 	a := app.NewApplication(pool, prober, mediaPath)
-	svc := service.NewClient(a)
+	svc := service.NewClient(a, eng)
 	return channelshttp.NewServer(svc).NewRouter()
 }

@@ -13,6 +13,9 @@ func (s Server) NewRouter() *chi.Mux {
 			r.Delete("/", s.Delete)
 			r.Get("/playlist", s.GetPlaylist)
 			r.Put("/playlist", s.SetPlaylist)
+			r.Post("/start", s.Start)
+			r.Post("/stop", s.Stop)
+			r.Get("/status", s.Status)
 		})
 	})
 	return r

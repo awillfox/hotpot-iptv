@@ -47,7 +47,6 @@ func main() {
 		defer pool.Close()
 
 		prober := ffmpeg.CLI{FFprobePath: cfg.FFprobePath}
-		r.Mount("/api/v1", channels.GetHTTPHandler(pool, prober, cfg.MediaPath))
 
 		q := sqlc.New(pool)
 		sup = engine.NewSupervisor(
@@ -58,6 +57,7 @@ func main() {
 			engine.NewSQLStore(q),
 			ffmpeg.Runner{FFmpegPath: cfg.FFmpegPath, StallTimeout: 30 * time.Second},
 		)
+		r.Mount("/api/v1", channels.GetHTTPHandler(pool, prober, cfg.MediaPath, sup))
 		if err := sup.RestoreRunning(context.Background()); err != nil {
 			log.Printf("restore running channels: %v", err)
 		}
