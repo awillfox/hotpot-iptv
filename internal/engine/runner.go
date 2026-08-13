@@ -97,6 +97,7 @@ func (r *Runner) Run(ctx context.Context) {
 	}
 	consecFails := 0
 	backoff := backoffBase
+	r.purgeItemDirs()
 
 	for ctx.Err() == nil {
 		iterStart := time.Now()
@@ -255,6 +256,27 @@ func itemDirNum(name string) (int64, bool) {
 	}
 	n, err := strconv.ParseInt(name, 10, 64)
 	return n, err == nil
+}
+
+// purgeItemDirs clears every item dir for this channel before playback starts.
+// itemSeq restarts at 0 with each Runner, so after a restart the new run would
+// write 000001 on top of the previous run's directory and serve a mix of old
+// and new segments. The playlist starts empty on restart, so nothing on disk is
+// reachable anyway — dropping it all is both safe and necessary.
+func (r *Runner) purgeItemDirs() {
+	root := filepath.Join(r.spec.StreamsPath, r.spec.Slug)
+	ents, err := os.ReadDir(root)
+	if err != nil {
+		return // no channel dir yet: nothing to purge
+	}
+	for _, e := range ents {
+		if !e.IsDir() {
+			continue
+		}
+		if _, ok := itemDirNum(e.Name()); ok {
+			_ = os.RemoveAll(filepath.Join(root, e.Name()))
+		}
+	}
 }
 
 // sweepStaleItemDirs removes item directories that no playlist can reach any

@@ -244,6 +244,52 @@ func TestRunnerFloorsItemRateWhenEncodeExitsInstantly(t *testing.T) {
 		"an unpaced ffmpeg must not spin: expected ~5 items in 550ms at a 100ms floor, got %d", n)
 }
 
+// blockingProc never finishes an encode, so no segment is ever appended. With
+// an empty live window the eviction sweep returns early, which isolates
+// start-time purging from it.
+type blockingProc struct{}
+
+func (blockingProc) Run(ctx context.Context, args []string, _ ffmpeg.RunOpts) error {
+	if strings.Contains(strings.Join(args, " "), "-f webvtt") {
+		return nil
+	}
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func TestRunnerPurgesStaleItemDirsOnStart(t *testing.T) {
+	setItemFloor(t, 10*time.Millisecond)
+	streams := t.TempDir()
+	// Leftovers from a previous run of this channel. itemSeq restarts at 0 with
+	// every Runner, so this run writes 000001 again — stale files under the old
+	// numbers would be mixed into the new stream.
+	stale := filepath.Join(streams, "movies", "000009")
+	require.NoError(t, os.MkdirAll(stale, 0o755))
+	staleFile := filepath.Join(stale, "v_0.ts")
+	require.NoError(t, os.WriteFile(staleFile, []byte("stale"), 0o644))
+	keep := filepath.Join(streams, "movies", "keep-me.txt")
+	require.NoError(t, os.WriteFile(keep, []byte("not mine"), 0o644))
+
+	// blockingProc keeps the playlist empty, so the eviction sweep cannot be
+	// what removes the stale dir — only a purge at start can.
+	r := NewRunner(testSpec(t, streams), 0, &memStore{}, blockingProc{})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { r.Run(ctx); close(done) }()
+	t.Cleanup(func() { cancel(); <-done })
+
+	// Monotonic: the file exists now and is never recreated once purged.
+	waitFor(t, 2*time.Second, func() bool {
+		_, err := os.Stat(staleFile)
+		return os.IsNotExist(err)
+	})
+	cancel()
+	<-done
+
+	_, err := os.Stat(keep)
+	assert.NoError(t, err, "purge must only touch all-digit item dirs")
+}
+
 func TestRunnerSweepsItemDirsOnceTheirSegmentsAreEvicted(t *testing.T) {
 	setItemFloor(t, 10*time.Millisecond)
 	streams := t.TempDir()
