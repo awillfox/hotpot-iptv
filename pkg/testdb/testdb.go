@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -17,6 +18,8 @@ var (
 	connURL string
 	initErr error
 )
+
+const defaultConnURL = "postgres:///hotpot_test?host=/var/run/postgresql"
 
 const dropTablesSQL = `DROP TABLE IF EXISTS channel_events, channel_state, playlist_items, media_files, channels CASCADE`
 
@@ -26,10 +29,7 @@ func New(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	ctx := context.Background()
 	once.Do(func() {
-		connURL = os.Getenv("PSQL_TEST_URL")
-		if connURL == "" {
-			connURL = "postgres:///hotpot_test?host=/var/run/postgresql"
-		}
+		connURL = resolveConnURL(repoRoot())
 		pool, err := pgxpool.New(ctx, connURL)
 		if err != nil {
 			initErr = err
@@ -62,7 +62,29 @@ func New(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
-func schemaPath() string {
+func schemaPath() string { return filepath.Join(repoRoot(), "schema.sql") }
+
+func repoRoot() string {
 	_, f, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(f), "..", "..", "schema.sql")
+	return filepath.Join(filepath.Dir(f), "..", "..")
+}
+
+// resolveConnURL picks the test database: an exported PSQL_TEST_URL first, then
+// the repo-root .env, then a local socket. Tests run with the working directory
+// set to their own package, so the .env has to be located from the repo root
+// rather than the CWD. Parsed with viper's dotenv codec, the same one
+// internal/config uses, so both read the file identically.
+func resolveConnURL(root string) string {
+	if u := os.Getenv("PSQL_TEST_URL"); u != "" {
+		return u
+	}
+	v := viper.New()
+	v.SetConfigFile(filepath.Join(root, ".env"))
+	v.SetConfigType("env")
+	if err := v.ReadInConfig(); err == nil {
+		if u := v.GetString("PSQL_TEST_URL"); u != "" {
+			return u
+		}
+	}
+	return defaultConnURL
 }

@@ -1,5 +1,8 @@
 version: "3"
 
+# Optional; real environment variables still take precedence.
+dotenv: ['.env']
+
 tasks:
   run:
     cmds: [go run .]
@@ -7,7 +10,12 @@ tasks:
     cmds: [go test -p 1 ./...]
   fmt:
     cmds: [go fmt ./...]
+  migrate-dev-plan:
+    desc: Print the migration Atlas would apply to PSQL_URL, without applying it.
+    cmds:
+      - atlas schema apply --url "$PSQL_URL" --dev-url "$PSQL_DEV_URL" --to file://schema.hcl --dry-run
   migrate-dev:
+    desc: Apply schema.hcl to PSQL_URL. PSQL_DEV_URL is a scratch db Atlas wipes each run.
     cmds:
       - atlas schema apply --url "$PSQL_URL" --dev-url "$PSQL_DEV_URL" --to file://schema.hcl
   generate-sql-schema:

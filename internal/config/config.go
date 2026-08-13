@@ -40,6 +40,13 @@ func Load() (*Config, error) {
 	v.SetDefault("FFMPEG_PATH", "ffmpeg")
 	v.SetDefault("FFPROBE_PATH", "ffprobe")
 
+	// Optional .env in the working directory. Absent is normal — the Docker
+	// image passes real environment variables instead. Viper ranks env above
+	// config file, so an exported var still overrides the file.
+	v.SetConfigFile(".env")
+	v.SetConfigType("env")
+	_ = v.ReadInConfig()
+
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
