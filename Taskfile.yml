@@ -23,3 +23,13 @@ tasks:
       - atlas schema inspect --url "$PSQL_URL" --format '{{"{{ sql . }}"}}' > schema.sql
   sqlcgen:
     cmds: [sqlc generate]
+  docker-build:
+    desc: Build the deployable image.
+    cmds: [docker compose build]
+  e2e-media:
+    desc: Generate multi-track test MKVs into testdata/e2e (needs local ffmpeg).
+    cmds: [sh scripts/make-test-media.sh]
+  e2e-run:
+    desc: Run against the generated test media with the software encoder.
+    cmds:
+      - ENCODER=software MEDIA_PATH=$PWD/testdata/e2e STREAMS_PATH=/tmp/hotpot-streams go run .

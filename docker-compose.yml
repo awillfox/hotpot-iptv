@@ -1,0 +1,45 @@
+# Deployment target is JEMMA-SERVER (Windows 11 + Docker Desktop, linux
+# containers, nvidia-container-runtime registered, Quadro M620).
+#
+# Deliberately NO db service: that host already runs a postgres container
+# (postgis/postgis:18-3.6) publishing 5432, which is what PSQL_URL in .env
+# already points at. Adding one here would collide on the port and split the
+# data across two databases.
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    runtime: nvidia
+    ports:
+      - "8080:8080"
+    environment:
+      # Passed through from .env as-is. The container reaches the existing
+      # postgres over the host's LAN address, so no rewrite is needed.
+      PSQL_URL: ${PSQL_URL:?set PSQL_URL in .env}
+      ENCODER: ${ENCODER:-nvenc}
+      SEGMENT_SECONDS: ${SEGMENT_SECONDS:-4}
+      WINDOW_SEGMENTS: ${WINDOW_SEGMENTS:-30}
+      VIDEO_WIDTH: ${VIDEO_WIDTH:-1920}
+      VIDEO_HEIGHT: ${VIDEO_HEIGHT:-1080}
+      VIDEO_BITRATE_K: ${VIDEO_BITRATE_K:-5000}
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,video,utility
+    volumes:
+      - media:/media:ro
+      - streams:/streams
+
+volumes:
+  # Segments are written and deleted constantly and are worthless after a
+  # restart, so they live in RAM rather than on disk.
+  streams:
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+  # The SMB share, mounted read-only. iocharset=utf8 is required: this library
+  # contains Thai filenames that are mangled without it.
+  media:
+    driver: local
+    driver_opts:
+      type: cifs
+      device: //${SMB_HOST:?set SMB_HOST in .env}/${SMB_SHARE:?set SMB_SHARE in .env}
+      o: "username=${SMB_USER},password=${SMB_PASSWORD},ro,vers=3.0,iocharset=utf8"
